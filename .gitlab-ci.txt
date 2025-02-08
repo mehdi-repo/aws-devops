@@ -1,0 +1,40 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  AWS_REGION: "eu-central-1"
+  ECR_REPO: "605134428871.dkr.ecr.eu-central-1.amazonaws.com/fastapi-app"
+
+build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - apk add --no-cache aws-cli
+    - echo "Setting up AWS credentials..."
+    - mkdir -p ~/.aws
+    - echo "[default]" > ~/.aws/credentials
+    - echo "aws_access_key_id=$AWS_ACCESS_KEY_ID" >> ~/.aws/credentials
+    - echo "aws_secret_access_key=$AWS_SECRET_ACCESS_KEY" >> ~/.aws/credentials
+    - echo "[default]" > ~/.aws/config
+    - echo "region=$AWS_REGION" >> ~/.aws/config
+    - chmod 600 ~/.aws/credentials ~/.aws/config
+  script:
+    - echo "Logging into AWS ECR..."
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO
+    - echo "Building Docker image..."
+    - docker build -t $ECR_REPO:$CI_COMMIT_SHA .
+    - echo "Pushing Docker image to ECR..."
+    - docker push $ECR_REPO:$CI_COMMIT_SHA
+    - echo "Tagging latest image..."
+    - docker tag $ECR_REPO:$CI_COMMIT_SHA $ECR_REPO:latest
+    - docker push $ECR_REPO:latest
+
+deploy:
+  stage: deploy
+  image: amazon/aws-cli
+  script:
+    - echo "Forcing ECS service to pull the latest image..."
+    - aws ecs update-service --cluster fastapi-cluster --service fastapi-service --force-new-deployment --region $AWS_REGION
