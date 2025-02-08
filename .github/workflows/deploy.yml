@@ -27,8 +27,9 @@ jobs:
 
       - name: Build and Tag Docker Image
         run: |
-          docker build -t ${{ secrets.ECR_REPO }}:${{ github.sha }} .
-          docker tag ${{ secrets.ECR_REPO }}:${{ github.sha }} ${{ secrets.ECR_REPO }}:latest
+          docker build -t fastapi-app:${{ github.sha }} .
+          docker tag fastapi-app:${{ github.sha }} ${{ secrets.ECR_REPO }}:${{ github.sha }}
+          docker tag fastapi-app:${{ github.sha }} ${{ secrets.ECR_REPO }}:latest
 
       - name: Push Docker Image to ECR
         run: |
@@ -50,4 +51,4 @@ jobs:
 
       - name: Force ECS Service to Pull Latest Image
         run: |
-          aws ecs update-service --cluster fastapi-cluster --service fastapi-service --force-new-deployment
+          aws ecs update-service --cluster ${{ secrets.ECS_CLUSTER }} --service ${{ secrets.ECS_SERVICE }} --force-new-deployment
