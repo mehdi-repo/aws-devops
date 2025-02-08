@@ -3,7 +3,7 @@ name: Deploy to AWS ECS
 on:
   push:
     branches:
-      - main  # Runs on every push to main
+      - main
 
 jobs:
   build:
@@ -27,12 +27,11 @@ jobs:
 
       - name: Build and Tag Docker Image
         run: |
-          docker build -t ${{ secrets.ECR_REPO }}:${{ github.sha }} .
-          docker tag ${{ secrets.ECR_REPO }}:${{ github.sha }} ${{ secrets.ECR_REPO }}:latest
+          docker build -t fastapi-app .
+          docker tag fastapi-app:latest ${{ secrets.ECR_REPO }}:latest
 
       - name: Push Docker Image to ECR
         run: |
-          docker push ${{ secrets.ECR_REPO }}:${{ github.sha }}
           docker push ${{ secrets.ECR_REPO }}:latest
 
   deploy:
@@ -48,23 +47,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Register New ECS Task Definition
-        run: |
-          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition fastapi-app)
-          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE_URI "${{ secrets.ECR_REPO }}:latest" '.taskDefinition | .containerDefinitions[0].image=$IMAGE_URI | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities)')
-          echo $NEW_TASK_DEFINITION > new-task-def.json
-          aws ecs register-task-definition --cli-input-json file://new-task-def.json
-
-      - name: Get Latest Task Definition Revision
-        id: task
-        run: |
-          LATEST_REVISION=$(aws ecs list-task-definitions --query "taskDefinitionArns[-1]" --output text)
-          echo "TASK_REVISION=$LATEST_REVISION" >> $GITHUB_ENV
-
-      - name: Update ECS Service with New Task Definition
-        run: |
-          aws ecs update-service --cluster fastapi-cluster --service fastapi-service --task-definition $TASK_REVISION
-
-      - name: Force New Deployment
+      - name: Update ECS Service
         run: |
           aws ecs update-service --cluster fastapi-cluster --service fastapi-service --force-new-deployment
